@@ -1,0 +1,7 @@
+
+# Ignore files
+*.exe
+*.sh
+*.o
+*.so
+*.a
