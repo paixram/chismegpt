@@ -24,7 +24,10 @@ SEMCHECK init_program_semaphores(memory_data *mem) {
         return errors;
     }
 
-
+    if(sem_init(&(mem->synchro_rooms.packet_ready), 1, 0) == -1) {
+        printf("[ - ] Error al inicializar el semaforo del cuarto de sincronizacion\n");
+        return errors;
+    }
 
     if(sem_init(&(mem->mutex), 1, 1) == -1) {
         printf("[ - ] Error al inicializar el semaforo de acceso a la estructura de memoria compartida\n");
@@ -92,17 +95,28 @@ void create_shared_memory(CORE_SETS *core_settings) {
     return;
 }
 
-int temp_memory(char* name) {
+int session_memory(char* name, session_packet** buf) {
     int shimd;
     // create memory logic
     shimd = shm_open(name, O_CREAT | O_RDWR, 0666);
-
-    ftruncate(shimd, (12 * sizeof(char))); // define size of memory
     
-    memory_data *buffer = mmap(NULL, 12 * sizeof(char), PROT_READ | PROT_WRITE, MAP_SHARED, shimd, 0);
+    if(shimd == -1) {
+        printf("[ + ] Hubo un error al crear la memoria de sesion del cliente");
+    }
 
-    memset(buffer, 0, 12 * sizeof(char));
+    ftruncate(shimd, sizeof(session_packet)); // define size of memory
     
+    session_packet *buffer = mmap(NULL, sizeof(session_packet), PROT_READ | PROT_WRITE, MAP_SHARED, shimd, 0);
+     
+    
+    // Iniciar el semaforo
+    sem_init(&buffer->session_sem, 1, 1);
+    sem_init(&buffer->client_reading, 1, 0);
+    sem_init(&buffer->server_reading, 1, 0);
+    sem_init(&buffer->check_response, 1, 0);
+
+
+    *buf = buffer;
     
     return shimd;
 }
@@ -112,6 +126,13 @@ int destroy_all_resources(CORE_SETS *core_settings) {
     sem_destroy(&core_settings->memory_ptr->mutex);
     sem_destroy(&core_settings->memory_ptr->server_messages.access);
     sem_destroy(&core_settings->memory_ptr->synchro_rooms.sync_room_sem);
+    sem_destroy(&core_settings->memory_ptr->synchro_rooms.packet_ready);
+    
+    for(int i = 0; i < core_settings->memory_ptr->client_count; i++) {
+        sem_destroy(&core_settings->memory_ptr->client_id[i].client_sync);
+        sem_destroy(&core_settings->memory_ptr->client_id[i].server_sync);
+    }
+
 
     munmap(core_settings->memory_ptr, sizeof(memory_data));
     close(core_settings->shimd);
@@ -124,7 +145,6 @@ int destroy_all_resources(CORE_SETS *core_settings) {
 
     return 1;
 }
-
 
 
 

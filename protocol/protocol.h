@@ -8,12 +8,7 @@
 #include "../core/core_utils.h"
 
 
-typedef enum {
-    TP = 'T', // My temp memory - Le dice al server que ya inicio la memoria temporal
-    WR = 'V',  // Waiting for response - Esperar para respuesta
-    GC = 'G', // Give me a code - Le dice a chismeGPT que quiero un ID
-    CT = 'C', // Change user type - Le dice a chismegpt que cambiare entre los 2 tipos de usuarios de la pagina
-} HANDSHAKE_CODE;
+
 
 typedef enum {
     WRITE_OK,  
@@ -22,8 +17,9 @@ typedef enum {
     READ_ERROR,
 } BUFFER_OP_STATUS;
 
-void assign_session_code(char *data, HANDSHAKE_CODE hc);
-char get_char_by_code(HANDSHAKE_CODE code);
+void assign_session_code(char *data, COMMUNICATION_CODE hc);
+char get_char_by_code(COMMUNICATION_CODE code);
+COMMUNICATION_CODE get_code_by_char(char code);
 BUFFER_OP_STATUS write_in_buffer(char *buffer, char *data);
 
 // Start server definition
@@ -34,7 +30,22 @@ void handshake();
 
 
 // Client proto def
-int open_conn(CORE_SETS *core_settings,char* channel);
+typedef struct {
+    int tempid;
+    session_packet *buf_ref;
+    char *channel;
+} CLIENT_SETS;
+
+void *handle_user_personal_session(void* session_name);
+CLIENT_SETS open_conn(CORE_SETS *core_settings,char* channel);
 void *chismegpt_listen(void *core_settings);
 
+// Api funcs
+int check_wait_status(CLIENT_SETS *cs);
+void get_session_id(CLIENT_SETS *cs, int mode);
+void power_on_resources(CORE_SETS *cs, int client_operation);
+void print_user(CORE_SETS *core, int index);
+void wait_for_read(session_packet *sp);
+void ready_for_read(session_packet *sp);
+void write_in(CORE_SETS *core_sets, CLIENT_SETS *client_sets);
 #endif

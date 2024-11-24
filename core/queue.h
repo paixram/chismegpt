@@ -20,19 +20,12 @@ typedef struct {
     USER_PRIV priv_level; 
 } MESSAGE;
 
-typedef enum {
-    SYNC = 0,
-    PAYLOAD = 1,
-    BYE = 2,
-} MSG_TYPE;
-
 // Buffer structure
 #define MAX_BUFFER 1024
 
 typedef char buffer[MAX_BUFFER];
 
-typedef struct {
-    MSG_TYPE type;
+typedef struct { 
     buffer data;
     USER_PRIV priv_level;
 } msg_proto_ref1;

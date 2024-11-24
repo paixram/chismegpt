@@ -24,6 +24,7 @@ typedef struct {
 
 typedef struct { // Structura para implementar la sala de espera o de sincronizacion
     sem_t sync_room_sem;
+    sem_t packet_ready;
     char room_name[12];
 } sync_room;
 
@@ -38,6 +39,7 @@ typedef struct {
     MessagesQueue server_messages;
     sync_room synchro_rooms;
     client client_id[MAX_CLIENTS];
+    int client_count;
 } memory_data;
 
 
@@ -70,6 +72,32 @@ CORE_SETS init_memory();
 void create_shared_memory(CORE_SETS *core_settings);
 int destroy_all_resources(CORE_SETS *core_settings);
 
-int temp_memory(char* name);
+
+typedef enum {
+    TP = 'T', // My temp memory - Le dice al server que ya inicio la memoria temporal
+    TC = 'M', // Temp memory connected from server - El servidor ahora esta en la memoria temporal
+    WR = 'V',  // Waiting for response - Esperar para respuesta
+    GC = 'G', // Give me a code - Le dice a chismeGPT que quiero un ID
+    CT = 'C', // Change user type - Le dice a chismegpt que cambiare entre los 2 tipos de usuarios de la pagina
+    SM = 'S' // User send msg to server - El cliente mando mensaje al encolamiento del server
+} COMMUNICATION_CODE;
+
+typedef enum {
+    OK,
+    NOT_OK,
+} request_status;
+
+typedef struct { // estructura para operaciones de sesion (generalmente rapidas)
+    sem_t session_sem;
+    sem_t client_reading;
+    sem_t server_reading;
+    sem_t check_response;
+    int id;
+    char status;
+    int request_status;
+    char buffer[256];
+} session_packet;
+
+int session_memory(char* name, session_packet** buf);
 
 #endif
