@@ -5,3 +5,9 @@
 *.o
 *.so
 *.a
+
+
+# Ignore bins
+
+server
+client
