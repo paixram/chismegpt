@@ -1,5 +1,5 @@
 # Instrucciones de Uso
-> [!Requisitos Previos]
+> [!IMPORTANT] Requisitos previos
 > Compilador GCC compatible con C11 o superior.
 > Sistema operativo Unix/Linux con soporte para semáforos POSIX y memoria compartida.
 > Herramientas de compilación estándar (make es opcional si se proporciona un Makefile).
