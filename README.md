@@ -5,7 +5,8 @@
 > Herramientas de compilación estándar (make es opcional si se proporciona un Makefile).
 
 # compilación
-1. Compilar el servidor
+1. Compilar el servidor:
+
 Clonar el repositorio o copiar los archivos del proyecto en un directorio local.
 Compilar el Servidor ("core"):
     * `gcc -o core core.c protocol.c queue.c -lpthread -lrt`
