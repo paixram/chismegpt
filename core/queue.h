@@ -11,8 +11,8 @@
 #define MESSAGE_SIZE 256
 
 typedef enum {
-        POS_PAGO = 0,
-        PRE_PAGO = 1,
+        PRE_PAGO = 0,
+        POS_PAGO = 1,
 } USER_PRIV;
 
 typedef struct {
@@ -27,7 +27,8 @@ typedef char buffer[MAX_BUFFER];
 
 typedef struct { 
     buffer data;
-    USER_PRIV priv_level;
+    int priv_level;
+    int client_id;
 } msg_proto_ref1;
 
 typedef struct {

@@ -16,7 +16,8 @@
 typedef struct {
     int id;
     char nombre[12];
-    USER_PRIV priority;
+    int priority;
+    int message_count;
     sem_t client_sync;
     sem_t server_sync;
 } client;
@@ -38,6 +39,7 @@ typedef struct {
                     
     MessagesQueue server_messages;
     sync_room synchro_rooms;
+    sem_t server_messages_access;
     client client_id[MAX_CLIENTS];
     int client_count;
 } memory_data;
@@ -61,6 +63,7 @@ typedef struct {
     int shimd;
     char* name;
     memory_data *memory_ptr;
+    int max_concurrent_messages;
 } CORE_SETS;
 
 CORE_SETS get_default_core_sets();

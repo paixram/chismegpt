@@ -17,6 +17,9 @@ typedef enum {
     READ_ERROR,
 } BUFFER_OP_STATUS;
 
+
+void initialize_protocol(CORE_SETS *core_settings);
+
 void assign_session_code(char *data, COMMUNICATION_CODE hc);
 char get_char_by_code(COMMUNICATION_CODE code);
 COMMUNICATION_CODE get_code_by_char(char code);
@@ -34,6 +37,7 @@ typedef struct {
     int tempid;
     session_packet *buf_ref;
     char *channel;
+    int user_mode;
 } CLIENT_SETS;
 
 void *handle_user_personal_session(void* session_name);

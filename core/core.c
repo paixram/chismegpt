@@ -33,6 +33,11 @@ SEMCHECK init_program_semaphores(memory_data *mem) {
         printf("[ - ] Error al inicializar el semaforo de acceso a la estructura de memoria compartida\n");
         return errors;
     }
+
+    if (sem_init(&(mem->server_messages_access), 1, 1) == -1) {
+        printf("[ - ] Error al inicializar el semáforo de acceso a la cola de mensajes\n");
+        return errors;
+    }
     
     return success;
 };

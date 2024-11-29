@@ -12,14 +12,68 @@
 #include <pthread.h>
 #include <unistd.h>
 
-void *chismegpt_listen(void *core_settings) {
-    CORE_SETS *csts = (CORE_SETS *)core_settings;
-    //while(1) {
-            
-        // TODO: CREAR EL SEMAFORO SINMCHRONIZE PARA SINCRONIZAR LOS NUEVOS CLIENTES
-        
-    //} 
+#define PROCESSING_TIME_MS 500
 
+sem_t concurrent_messages_sem;
+
+
+void initialize_protocol(CORE_SETS *core_settings) {
+    // Inicializar el semáforo con el valor de max_concurrent_messages
+    sem_init(&concurrent_messages_sem, 0, core_settings->max_concurrent_messages);
+}
+
+void *message_processing_thread(void *arg) {
+    msg_proto_ref1 *msg = (msg_proto_ref1 *)arg;
+
+    // Esperar si se ha alcanzado el máximo de mensajes concurrentes
+    sem_wait(&concurrent_messages_sem);
+    
+    printf("[ Procesando ] Mensaje de usuario ID %d (%s-pago): %s\n",
+           msg->client_id,
+           msg->priv_level == POS_PAGO ? "Pos" : "Pre",
+           msg->data);
+
+    // Simular tiempo de procesamiento
+    usleep(PROCESSING_TIME_MS * 1000);
+
+    printf("[ Procesado ] Mensaje de usuario ID %d: %s\n", msg->client_id, msg->data);
+
+    // Liberar el semáforo al finalizar
+    sem_post(&concurrent_messages_sem);
+
+    free(msg);
+    return NULL;
+}
+
+
+void *chismegpt_listen(void *core_settings) {
+    CORE_SETS *cs = (CORE_SETS *)core_settings;
+    while (1) {
+        sem_wait(&cs->memory_ptr->server_messages_access);
+
+        sem_wait(&cs->memory_ptr->mutex);
+        if (cs->memory_ptr->server_messages.size > 0) {
+            msg_proto_ref1 msg = deque(&cs->memory_ptr->server_messages);
+            sem_post(&cs->memory_ptr->mutex);
+
+            // Crear un nuevo hilo para procesar el mensaje
+            msg_proto_ref1 *msg_copy = malloc(sizeof(msg_proto_ref1));
+            memcpy(msg_copy, &msg, sizeof(msg_proto_ref1));
+
+            pthread_t thread_id;
+            pthread_create(&thread_id, NULL, message_processing_thread, msg_copy);
+            pthread_detach(thread_id);
+        } else {
+            sem_post(&cs->memory_ptr->mutex);
+        }
+
+        sem_post(&cs->memory_ptr->server_messages_access);
+
+        // Pequeña pausa para evitar consumo excesivo de CPU
+        usleep(1000);
+    }
+
+    return NULL;
 }
 
 struct SESION_DATA_FORMAT {
@@ -110,8 +164,7 @@ void *handle_user_personal_session(void* session_name) {
     sp->status = 'V';
     sem_post(&sp->session_sem);
     sem_post(&sp->server_reading);
-
-    printf("Pirntf: %d\n", sp->id); 
+ 
     // Bucle while para captar señales de mensaje en la session activa
     while(1) {
         
@@ -124,35 +177,102 @@ void *handle_user_personal_session(void* session_name) {
 
        switch(cd_received) {
             case GC:
-                if(sp->id != 999) {
-                    printf("[ - ] No es un usuario desconocido");
+                if (sp->id != 999) {
+                    printf("[ - ] Usuario ya tiene un ID asignado\n");
+                } else {
+                    // Crear código y mandarlo al usuario
+                    sem_wait(&cs->memory_ptr->mutex);
+                    sp->id = cs->memory_ptr->client_count++;
+                    power_on_resources(cs, sp->id);
+
+                    cs->memory_ptr->client_id[sp->id].id = sp->id;
+                    strncpy(cs->memory_ptr->client_id[sp->id].nombre, s_name, sizeof(cs->memory_ptr->client_id[sp->id].nombre));
+                    cs->memory_ptr->client_id[sp->id].priority = sp->buffer[0];
+                    cs->memory_ptr->client_id[sp->id].message_count = 0; // Inicializar contador
+                    sem_post(&cs->memory_ptr->mutex);
+
+                    print_user(cs, sp->id);
+                    ready_for_read(sp);
+                }
+                break;
+             case SM:
+                // Verificar límite de mensajes si es pre-pago
+                //printf("MEnsajes del user: %d\n", cs->memory_ptr->client_id[sp->id].message_count);           
+                // Verificar que el ID es válido
+                 if (sp->id == 999) {
+        printf("[ - ] Cliente con ID inválido intentando enviar mensaje. Asignando nuevo ID...\n");
+        
+        // Asignar un nuevo ID al cliente
+        sp->id = cs->memory_ptr->client_count++;
+        power_on_resources(cs, sp->id);
+
+        // Inicializar los datos del cliente
+        cs->memory_ptr->client_id[sp->id].id = sp->id;
+        strncpy(cs->memory_ptr->client_id[sp->id].nombre, s_name, sizeof(cs->memory_ptr->client_id[sp->id].nombre));
+        cs->memory_ptr->client_id[sp->id].priority = sp->buffer[0]; // Obtener prioridad del mensaje
+        cs->memory_ptr->client_id[sp->id].message_count = 0;
+
+        printf("[ + ] Se asignó el ID %d al cliente '%s'\n", sp->id, cs->memory_ptr->client_id[sp->id].nombre);
+    }          
+                if (cs->memory_ptr->client_id[sp->id].priority == PRE_PAGO) {
+                    if (cs->memory_ptr->client_id[sp->id].message_count >= 10) {
+                        // Enviar mensaje de error al cliente
+                        //printf("SUSUIDOO");
+                        printf("[ - ] Usuario pre-pago ha alcanzado el límite de mensajes.\n");
+                        sp->status = 'E'; // Código de error
+                        strcpy(sp->buffer, "Límite alcanzado");
+                        ready_for_read(sp);
+                        break;
+                    } else { 
+                        cs->memory_ptr->client_id[sp->id].message_count++;
+                    }
+                }
+                // Procesar el mensaje normalmente
+                sem_wait(&cs->memory_ptr->server_messages_access);
+
+                msg_proto_ref1 mpr;
+                strcpy(mpr.data, sp->buffer);
+                mpr.priv_level = cs->memory_ptr->client_id[sp->id].priority;
+                mpr.client_id = sp->id;
+
+                enque(&cs->memory_ptr->server_messages, mpr);
+
+                sem_post(&cs->memory_ptr->server_messages_access);
+
+                ready_for_read(sp);
+                break;
+             case CT:
+                // Iniciar sección crítica
+                sem_wait(&cs->memory_ptr->mutex);
+    
+                // Verificar que el ID es válido
+                if (sp->id == 999) {
+                    printf("[ - ] Usuario con ID inválido intentando enviar mensaje\n");
+                    // Enviar error al cliente
+                    sp->status = 'E';
+                    strcpy(sp->buffer, "ID inválido");
+                    ready_for_read(sp);
+                    sem_post(&cs->memory_ptr->mutex);
+                    break;
                 }
 
-                // Crear codigo y mandarlo al usuario
-                sem_wait(&cs->memory_ptr->mutex);
-                sp->id = cs->memory_ptr->client_count++;
-                power_on_resources(cs, sp->id);
-             
-                cs->memory_ptr->client_id[sp->id].id = sp->id;
-                for(int i = 0; i < 12; i++) {
-                    cs->memory_ptr->client_id[sp->id].nombre[i] = s_name[i];
-                }
-                
+                // Cambiar el tipo de usuario
                 cs->memory_ptr->client_id[sp->id].priority = sp->buffer[0];
+                cs->memory_ptr->client_id[sp->id].message_count = 0;
+
+                // Salir de la sección crítica
                 sem_post(&cs->memory_ptr->mutex);
-                 print_user(cs, sp->id);
-                 ready_for_read(sp);
+
+                printf("[ Actualizado ] Usuario ID %d cambió a %s-pago.\n",
+                       sp->id,
+                       cs->memory_ptr->client_id[sp->id].priority == PRE_PAGO ? "pre" : "pos");
+                ready_for_read(sp);
                 break;
-            case SM:
-                // Se recibio un mensaje por parte del usuario
-                printf(" [ + ] Mensaje recibido desde: %s\n", cs->memory_ptr->client_id[sp->id].nombre);
-                sem_wait(&cs->memory_ptr->client_id[sp->id].client_sync);
-                sem_wait(&cs->memory_ptr->mutex);
-                msg_proto_ref1 msg = deque(&cs->memory_ptr->server_messages);
-                printf("Message: %s\n", msg.data);
-                sem_post(&cs->memory_ptr->mutex);
+            default:
+                printf("[ - ] Código de operación no reconocido\n");
+                ready_for_read(sp);
                 break;
-       }
+        }
 
        //print_user(cs, sp->id);
        //ready_for_read(sp);
@@ -358,7 +478,7 @@ void write_in(CORE_SETS *core_sets, CLIENT_SETS *client_sets) {
         printf("Ingrese su mensaje: \n");
         fgets(msg_buffer, sizeof(msg_buffer), stdin);
         msg_buffer[strcspn(msg_buffer, "\n")] = '\0';
-        printf("Su mensaje: %s\n", msg_buffer);
+        
         // Escribir el mensaje en la cola
         sem_wait(&(((*client_sets).buf_ref))->server_reading);
         sem_wait(&(((*client_sets).buf_ref))->session_sem);
@@ -376,7 +496,7 @@ void write_in(CORE_SETS *core_sets, CLIENT_SETS *client_sets) {
         
         sem_post(&(((*client_sets).buf_ref))->session_sem);
         sem_post(&(((*client_sets).buf_ref))->client_reading);
-        
+       
         // Liberacion para contactar con memory_ptr
         sem_post(&core_sets->memory_ptr->client_id[client_sets->buf_ref->id].client_sync);
 
