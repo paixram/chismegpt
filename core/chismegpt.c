@@ -16,7 +16,7 @@ int max_concurrent_messages = 0;
 
 void handler_exit() {
     printf("[ + ] Se liberaron los recursos con exito\n");
-    printf("[ BYE! ] Servidor en decadencia\n");
+    printf("[ BYE! ] Servidor cerrado\n");
 
     destroy_all_resources(&core);
     exit(0);

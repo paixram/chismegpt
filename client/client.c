@@ -25,7 +25,7 @@ void destroy_client_resources(CLIENT_SETS *client_sets) {
 
 void handler_exit() {
     printf("[ + ] Se liberaron los recursos con éxito\n");
-    printf("[ BYE! ] Cliente en decadencia\n");
+    printf("[ BYE! ] Cliente cerrado\n");
 
     destroy_client_resources(&client_sets);
     exit(0);
